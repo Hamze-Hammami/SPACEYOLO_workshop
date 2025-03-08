@@ -84,6 +84,210 @@ def easom(x, y):
     term2 = np.exp(-((x - np.pi)**2 + (y - np.pi)**2))
     return term1 * term2
 
+class NeuralNetworkFunction:
+    def __init__(self, hidden_size=10, random_seed=42, complexity=1.0, roughness=0.5, 
+                 num_attractors=10, min_depth=-4.0, attractor_influence=1.0,
+                 wave_scale=0.2, ridge_scale=0.3):
+        np.random.seed(random_seed)
+        self.hidden_size = hidden_size
+        self.complexity = complexity
+        self.roughness = roughness
+        self.attractor_influence = attractor_influence
+        self.wave_scale = wave_scale
+        self.ridge_scale = ridge_scale
+        scale = 0.5 * complexity
+        self.W1 = np.random.randn(2, hidden_size) * scale
+        self.b1 = np.random.randn(hidden_size) * scale * 0.5
+        self.W2 = np.random.randn(hidden_size, hidden_size) * scale
+        self.b2 = np.random.randn(hidden_size) * scale * 0.5
+        self.W3 = np.random.randn(hidden_size, hidden_size) * scale
+        self.b3 = np.random.randn(hidden_size) * scale * 0.5
+        self.W4 = np.random.randn(hidden_size, 1) * scale
+        self.b4 = np.random.randn(1) * scale * 0.5
+        
+        self.attractor_positions = []
+        self.attractor_values = []
+        self.attractor_widths = []
+        
+        self.attractor_positions.append((0.0, 0.0))
+        self.attractor_values.append(min_depth)  
+        self.attractor_widths.append(0.5)
+        
+        for i in range(num_attractors - 1):
+            pos_x = np.random.uniform(-4.0, 4.0)
+            pos_y = np.random.uniform(-4.0, 4.0)
+            self.attractor_positions.append((pos_x, pos_y))
+            
+            value = np.random.uniform(min_depth * 0.5, -min_depth * 0.25)
+            self.attractor_values.append(value)
+            
+            width = np.random.uniform(0.5, 1.5) * roughness
+            self.attractor_widths.append(width)
+    
+    def sigmoid(self, x):
+        return 1.0 / (1.0 + np.exp(-x))
+    
+    def tanh(self, x):
+        return np.tanh(x)
+    
+    def relu(self, x):
+        return np.maximum(0, x)
+    
+    def forward(self, x, y):
+        inputs = np.array([x, y])
+        
+        z1 = np.dot(inputs, self.W1) + self.b1
+        a1 = self.relu(z1)
+        
+        z2 = np.dot(a1, self.W2) + self.b2
+        a2 = self.tanh(z2)
+        
+        z3 = np.dot(a2, self.W3) + self.b3
+        a3 = self.sigmoid(z3)
+        
+        z4 = np.dot(a3, self.W4) + self.b4
+        output = z4[0]
+        
+        return output
+    
+    def __call__(self, x, y):
+        if isinstance(x, np.ndarray) and isinstance(y, np.ndarray) and x.ndim == 2 and y.ndim == 2:
+            Z = np.zeros_like(x)
+            for i in range(x.shape[0]):
+                for j in range(x.shape[1]):
+                    Z[i, j] = self._evaluate_single(x[i, j], y[i, j])
+            return Z
+        else:
+            return self._evaluate_single(x, y)
+    
+    def _evaluate_single(self, x, y):
+        base_output = self.forward(x, y) * self.complexity
+        
+        terrain = 0
+        
+        for i, (pos_x, pos_y) in enumerate(self.attractor_positions):
+            dist_squared = (x - pos_x)**2 + (y - pos_y)**2
+            width = self.attractor_widths[i]
+            terrain += self.attractor_values[i] * np.exp(-dist_squared / width) * self.attractor_influence
+        
+        sine_terrain = self.wave_scale * self.complexity * (
+            np.sin(2.0 * x * self.roughness) * np.cos(2.0 * y * self.roughness) + 
+            0.5 * np.sin(x * y * self.roughness)
+        )
+        
+        distance_from_origin = np.sqrt(x**2 + y**2)
+        ripples = 0.3 * self.complexity * np.sin(distance_from_origin * 2.0 * self.roughness) / (1.0 + 0.2 * distance_from_origin)
+        
+        bowl = 0.05 * (x**2 + y**2)
+        
+        ridges = self.ridge_scale * self.complexity * np.sin(5.0 * x * self.roughness) * np.cos(5.0 * y * self.roughness) * np.exp(-0.1 * distance_from_origin)
+        
+        boundary_penalty = 0
+        if abs(x) > 4.5 or abs(y) > 4.5:
+            boundary_penalty = 2.0 * (max(0, abs(x) - 4.5) + max(0, abs(y) - 4.5))
+        
+        return base_output + terrain + sine_terrain + ripples + bowl + ridges + boundary_penalty
+    
+    def visualize(self, bounds=(-5, 5)):
+        grid_size = 100
+        x_grid = np.linspace(bounds[0], bounds[1], grid_size)
+        y_grid = np.linspace(bounds[0], bounds[1], grid_size)
+        XX, YY = np.meshgrid(x_grid, y_grid)
+        
+        ZZ = np.zeros((grid_size, grid_size))
+        for i in range(grid_size):
+            for j in range(grid_size):
+                ZZ[i, j] = self._evaluate_single(XX[i, j], YY[i, j])
+        
+        fig = plt.figure(figsize=(15, 7))
+        
+        ax1 = fig.add_subplot(121, projection='3d')
+        surface = ax1.plot_surface(XX, YY, ZZ, cmap=cm.viridis, alpha=0.7)
+        ax1.set_xlabel('x')
+        ax1.set_ylabel('y')
+        ax1.set_zlabel('f(x,y)')
+        ax1.set_title('Neural Network Function Surface')
+        
+        ax2 = fig.add_subplot(122)
+        contour = ax2.contour(XX, YY, ZZ, 20, cmap=cm.viridis)
+        fig.colorbar(contour, ax=ax2)
+        
+        attractor_array = np.array(self.attractor_positions)
+        ax2.scatter(attractor_array[:, 0], attractor_array[:, 1], 
+                   color='red', marker='x', s=80, label='Attractors')
+        
+        ax2.set_xlabel('x')
+        ax2.set_ylabel('y')
+        ax2.set_title('Neural Network Function Contour')
+        ax2.legend()
+        
+        plt.tight_layout()
+        plt.show()
+        
+        min_idx = np.unravel_index(np.argmin(ZZ), ZZ.shape)
+        min_x = XX[min_idx]
+        min_y = YY[min_idx]
+        min_value = ZZ[min_idx]
+        print(f"Minimum visible value: {min_value} at position ({min_x}, {min_y})")
+        
+        return ZZ
+    
+    def regenerate_terrain(self, random_seed=None, complexity=None, roughness=None, 
+                          num_attractors=None, min_depth=None, attractor_influence=None,
+                          wave_scale=None, ridge_scale=None):
+
+        if random_seed is not None:
+            np.random.seed(random_seed)
+            
+        if complexity is not None:
+            self.complexity = complexity
+            
+        if roughness is not None:
+            self.roughness = roughness
+            
+        if attractor_influence is not None:
+            self.attractor_influence = attractor_influence
+            
+        if wave_scale is not None:
+            self.wave_scale = wave_scale
+            
+        if ridge_scale is not None:
+            self.ridge_scale = ridge_scale
+        
+        scale = 0.5 * self.complexity
+        self.W1 = np.random.randn(2, self.hidden_size) * scale
+        self.b1 = np.random.randn(self.hidden_size) * scale * 0.5
+        self.W2 = np.random.randn(self.hidden_size, self.hidden_size) * scale
+        self.b2 = np.random.randn(self.hidden_size) * scale * 0.5
+        self.W3 = np.random.randn(self.hidden_size, self.hidden_size) * scale
+        self.b3 = np.random.randn(self.hidden_size) * scale * 0.5
+        self.W4 = np.random.randn(self.hidden_size, 1) * scale
+        self.b4 = np.random.randn(1) * scale * 0.5
+        
+        if num_attractors is not None or min_depth is not None:
+            n_attr = num_attractors if num_attractors is not None else len(self.attractor_positions)
+            depth = min_depth if min_depth is not None else min(self.attractor_values)
+            
+            self.attractor_positions = []
+            self.attractor_values = []
+            self.attractor_widths = []
+            
+            self.attractor_positions.append((0.0, 0.0))
+            self.attractor_values.append(depth)  
+            self.attractor_widths.append(0.5)
+            
+            for i in range(n_attr - 1):
+                pos_x = np.random.uniform(-4.0, 4.0)
+                pos_y = np.random.uniform(-4.0, 4.0)
+                self.attractor_positions.append((pos_x, pos_y))
+                
+                value = np.random.uniform(depth * 0.5, -depth * 0.25)
+                self.attractor_values.append(value)
+                
+                width = np.random.uniform(0.5, 1.5) * self.roughness
+                self.attractor_widths.append(width)
+
+
 class BlackHoleOptimization:
     def __init__(self, objective_func, n_stars=50, dimensions=2, bounds=(-5.12, 5.12), max_iter=100):
         self.objective_func = objective_func
@@ -1019,7 +1223,14 @@ def visualize_blackhole(objective_func, history, bounds, save_animation=False, f
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1078,7 +1289,15 @@ def visualize_bigbang(objective_func, history, bounds, save_animation=False, fil
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+         
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1157,7 +1376,15 @@ def visualize_solarsystem(objective_func, history, bounds, save_animation=False,
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+         
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1231,7 +1458,15 @@ def visualize_multiverse(objective_func, history, bounds, save_animation=False, 
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+         
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1319,7 +1554,15 @@ def visualize_multiverse(objective_func, history, bounds, save_animation=False, 
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+         
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1407,7 +1650,15 @@ def visualize_galaxy(objective_func, history, bounds, save_animation=False, file
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+         
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1481,7 +1732,15 @@ def visualize_gravitational(objective_func, history, bounds, save_animation=Fals
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+         
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1552,7 +1811,15 @@ def visualize_supernova(objective_func, history, bounds, save_animation=False, f
     x = np.linspace(bounds[0], bounds[1], 100)
     y = np.linspace(bounds[0], bounds[1], 100)
     X, Y = np.meshgrid(x, y)
-    Z = objective_func(X, Y)
+
+         
+    if isinstance(objective_func, NeuralNetworkFunction):
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                Z[i, j] = objective_func._evaluate_single(X[i, j], Y[i, j])
+    else:
+        Z = objective_func(X, Y)
     
     fig = plt.figure(figsize=(15, 7))
     
@@ -1922,6 +2189,10 @@ def schwefel_handler(algorithm_name, particles, bounds, fitness_values=None, pre
 def main():
     np.random.seed(42)
     
+    nn_function = NeuralNetworkFunction(hidden_size=10, random_seed=42, complexity=4.0, roughness=0.8, 
+                 num_attractors=40, min_depth=-3.0, attractor_influence=2.0,
+                 wave_scale=0.5, ridge_scale=0.5)
+    
     algorithms = {
         1: ("Black Hole Optimization", blackhole),
         2: ("Big Bang-Big Crunch", bigbang),
@@ -1942,7 +2213,8 @@ def main():
         7: ("Griewank", griewank, (-600.0, 600.0)),
         8: ("Schwefel", schwefel, (-500.0, 500.0)),
         9: ("Michalewicz", michalewicz, (0.0, np.pi)),
-        10: ("Easom", easom, (-100.0, 100.0))
+        10: ("Easom", easom, (-100.0, 100.0)),
+        11: ("Neural Network", nn_function, (-5.0, 5.0))  
     }
     
     print("\n===== SPACE-INSPIRED OPTIMIZATION ALGORITHMS =====")
@@ -1966,7 +2238,7 @@ def main():
         print(f"{key}. {name}")
     
     try:
-        func_choice = int(input("\nSelect an objective function (1-10): "))
+        func_choice = int(input("\nSelect an objective function (1-11): "))
         if func_choice not in objective_functions:
             func_choice = 1
             print("Invalid selection. Using Rastrigin function as default.")
@@ -1975,6 +2247,10 @@ def main():
         print("Invalid input. Using Rastrigin function as default.")
     
     func_name, objective_func, bounds = objective_functions[func_choice]
+    
+    if func_choice == 11:
+        print("\nVisualizing the Neural Network Function before optimization...")
+        nn_function.visualize(bounds)
     
     try:
         max_iter = int(input("\nEnter maximum iterations (default 50): ") or "50")
@@ -2089,7 +2365,7 @@ def main():
             filename=filename
         )
     
-    elif algo_choice == 5: 
+    elif algo_choice == 5:  
         try:
             n_stars = int(input("Enter number of stars (default 50): ") or "50")
             if n_stars <= 0:
@@ -2171,37 +2447,6 @@ def main():
             filename=filename
         )
     
-    elif algo_choice == 7: 
-        try:
-            n_universes = int(input("Enter number of universes (default 50): ") or "50")
-            if n_universes <= 0:
-                n_universes = 50
-                print("Invalid value. Using default of 50 universes.")
-        except ValueError:
-            n_universes = 50
-            print("Invalid input. Using default of 50 universes.")
-        
-        try:
-            wormhole_prob = float(input("Enter wormhole existence probability (default 0.6): ") or "0.6")
-            if wormhole_prob < 0 or wormhole_prob > 1:
-                wormhole_prob = 0.6
-                print("Invalid value. Using default probability of 0.6.")
-        except ValueError:
-            wormhole_prob = 0.6
-            print("Invalid input. Using default probability of 0.6.")
-        
-        filename = f"multiverse_{func_name.lower()}.gif"
-        
-        best_solution, best_fitness = multiverse(
-            objective_func=objective_func,
-            n_universes=n_universes,
-            bounds=bounds,
-            max_iter=max_iter,
-            wormhole_prob=wormhole_prob,
-            save_animation=True,
-            filename=filename
-        )
-    
     elif algo_choice == 7:  
         try:
             n_universes = int(input("Enter number of universes (default 50): ") or "50")
@@ -2239,6 +2484,12 @@ def main():
     print(f"Best Solution: {best_solution}")
     print(f"Best Fitness: {best_fitness}")
     print(f"Animation saved as: {filename}")
+    
+    if func_choice == 11:
+        print("\nVisualizing the Neural Network Function after optimization with best solution...")
+        nn_function.W1 = best_solution[0]
+        nn_function.b1 = best_solution[1]
+        nn_function.visualize(bounds)
 
 if __name__ == "__main__":
     main()
