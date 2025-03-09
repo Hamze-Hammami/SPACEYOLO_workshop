@@ -45,6 +45,9 @@ scripts/train.ipynb
 ```
 ---
 
+
+
 ## Happy Learning 
 <img src="https://github.com/user-attachments/assets/ff465373-ca24-4638-bd0b-1203204f20f4" width="50%" />
 
+Repo of the first yolo workshop: [First YOLO Workshop](https://github.com/E4L-HWU/AI-Workshop-2025/tree/main)
