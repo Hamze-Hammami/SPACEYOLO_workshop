@@ -43,6 +43,8 @@ For local execution, open the script in a notebook:
 ```python
 scripts/train.ipynb
 ```
-
-
 ---
+
+## Happy Learning 
+<img src="https://github.com/user-attachments/assets/ff465373-ca24-4638-bd0b-1203204f20f4" width="50%" />
+
