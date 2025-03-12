@@ -22,6 +22,13 @@ Code for Optmisers visalisation and All other scripts required for training and 
 
 notebook can also be accessed here: https://colab.research.google.com/drive/1xV9_k9cJPW5G2P5f-6AuRGku20B9Q-Xb?usp=sharing
 
+## Theme Datasets 💾
+depris detection (small, mid and large)and others: **[Dataset](https://universe.roboflow.com/nsst3gp-9l3x6/space-debris-detection-bxlp3)**
+
+depris segmentaion and some satalites: **[Dataset](https://universe.roboflow.com/khadija-ashraf-772000/segmentation-1piz5/dataset/1)**
+
+stalites such as soho satlites + some depris: **[Dataset](https://universe.roboflow.com/space-debris-veh5c/space-debris-mugw2-jrufd-apdqa)**
+
 ## 🏋️ Pulling the Model
 You can clone the pre-trained model showen in the workshop to play around with directly from **Hugging Face** using:
 
