@@ -15,7 +15,7 @@ Covering PowerPoint, activity instructions, source code for space-themed optimiz
 ## 📜 Instructions
 All workshop instructions and explanations are provided in *docs**. Please refer to these slides for detailed guidance on setting up and running YOLOv8.
 follow instructions on 'docs.pdf'
-for presentation go to 'pres.pdf'
+for presentation go to 'PPT.pdf'
 
 ## 💻 Code
 Code for Optmisers visalisation and All other scripts required for training and inference are available in the **`code/`** directory.
